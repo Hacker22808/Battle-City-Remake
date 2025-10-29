@@ -12,6 +12,7 @@ class Tank(Entity):
         self.reload = 0.4
         self._cooldown = 0.0
         self.direction = pygame.Vector2(0, -1)
+        self.hp = 3
 
     def handle_input(self, inp):
         v = pygame.Vector2(0, 0)
@@ -23,6 +24,11 @@ class Tank(Entity):
             self.direction = v.normalize()
         return v
 
+    def take_damage(self, dmg=1):
+        self.hp -= dmg
+        if self.hp <= 0:
+            self.alive = False
+
     def can_shoot(self) -> bool:
         return self._cooldown <= 0.0
 
@@ -30,4 +36,5 @@ class Tank(Entity):
         self._cooldown = self.reload
 
     def update(self, dt):
-        if self._cooldown > 0: self._cooldown -= dt
+        if self._cooldown > 0:
+            self._cooldown -= dt

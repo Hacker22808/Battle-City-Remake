@@ -9,9 +9,8 @@ class CollisionSystem:
         self.physics = physics
 
     def update(self, player, enemies, bullets, blocks, eagle, on_events):
-        # кулі ↔ блоки/танки/база
         for b in list(bullets):
-            # з блоками
+            # блоки
             for bl in list(blocks):
                 if self.physics.rect_collision(b, bl):
                     bullets.remove(b); b.kill()
@@ -20,7 +19,7 @@ class CollisionSystem:
                         if bl.hp <= 0:
                             blocks.remove(bl); bl.kill()
                     return
-            # з ворогами/гравцем
+            # вороги
             if b.owner_tag == "player":
                 for e in list(enemies):
                     if self.physics.rect_collision(b, e):
@@ -28,11 +27,14 @@ class CollisionSystem:
                         bullets.remove(b); b.kill()
                         return
             else:
+                # ворожа куля потрапила в гравця
                 if self.physics.rect_collision(b, player):
                     bullets.remove(b); b.kill()
-                    on_events("player_hit")
+                    player.take_damage(1)
+                    if not player.alive:
+                        on_events("player_dead")
                     return
-            # з базою
+            # база
             if eagle and self.physics.rect_collision(b, eagle):
                 bullets.remove(b); b.kill()
                 on_events("eagle_down")
