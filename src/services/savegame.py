@@ -3,17 +3,36 @@
 """
 
 import json
-from pathlib import Path
+import os
 
-PATH = Path(".savegame.json")
+SAVE_FILE = "savegame.json"
 
-class SaveGame:
-    def __init__(self):
-        self.data = {"level": 1, "score": 0}
+default_save = {
+    "level": 1,
+    "score": 0,
+    "settings": {
+        "volume": 100,
+        "controls": {
+            "left": "A",
+            "right": "D",
+            "jump": "SPACE",
+            "fire": "F"
+        }
+    }
+}
 
-    def load(self):
-        if PATH.exists():
-            self.data.update(json.loads(PATH.read_text()))
+def save_game(data):
+    """Сохранение прогресса в JSON"""
+    with open(SAVE_FILE, "w") as f:
+        json.dump(data, f, indent=4)
 
-    def save(self):
-        PATH.write_text(json.dumps(self.data))
+def load_game():
+    """Загрузка прогресса, с валидацией"""
+    if not os.path.exists(SAVE_FILE):
+        return default_save.copy()
+    with open(SAVE_FILE, "r") as f:
+        data = json.load(f)
+    # Простая валидация
+    if "level" not in data or "score" not in data or "settings" not in data:
+        return default_save.copy()
+    return data

@@ -1,106 +1,130 @@
 """
 Основна сцена рівня: ініціалізує рівень (через systems/level_system.py), створює сутності (гравець, вороги, базу), реєструє системи (колізії, стрільба, AI). Обробляє паузу/перехід рівня/програш.
 """
+
+
 import pygame
-from ..core.scene import Scene
-from ..core import constants as C
-from ..systems.level_system import LevelSystem
-from ..systems.collision_system import CollisionSystem
-from ..systems.shooting_system import ShootingSystem
-from ..systems.ai_system import AISystem
-from .pause_scene import PauseScene
+from enum import Enum
 
-class GameScene(Scene):
-    def enter(self, **kwargs):
-        self.level = LevelSystem(self.app.assets)
-        self.player, self.enemies, self.blocks, self.eagle, self.bounds = self.level.build()
-        self.all_sprites = pygame.sprite.LayeredUpdates()
-        self.bullets = pygame.sprite.Group()
+class GameState(Enum):
+    RUNNING = 1
+    PAUSED = 2
+    LEVEL_COMPLETE = 3
+    GAME_OVER = 4
 
-        for b in self.blocks: self.all_sprites.add(b, layer=b.layer)
-        for e in self.enemies: self.all_sprites.add(e, layer=e.layer)
-        if self.eagle: self.all_sprites.add(self.eagle, layer=self.eagle.layer)
-        self.all_sprites.add(self.player, layer=self.player.layer)
+class GameScene:
+    def __init__(self, scene_manager, settings):
+        self.scene_manager = scene_manager
+        self.settings = settings
+        self.screen = pygame.display.get_surface()
+        self.state = GameState.RUNNING
+        
+        # Ініціалізація систем
+        self.level_system = None
+        self.collision_system = None
+        self.shooting_system = None
+        self.ai_system = None
+        
+        # Сутності гри
+        self.player = None
+        self.enemies = []
+        self.base = None
+        self.bullets = []
+        self.blocks = []
+        
+        # UI
+        self.font = pygame.font.Font(None, 36)
+        
+        # Завантаження рівня
+        self.current_level = 1
+        self.load_level(self.current_level)
 
-        self.collision = CollisionSystem(self.app.physics)
-        self.shooting = ShootingSystem(self.app.assets)
-        self.ai = AISystem(self.app.physics)
-        self.font = pygame.font.SysFont("Arial", 28)
+    def load_level(self, level):
+        """Завантаження рівня"""
+        # Тимчасові заглушки для демонстрації
+        screen_width, screen_height = self.screen.get_size()
+        
+        # Створення гравця
+        self.player = type('Player', (), {})()
+        self.player.rect = pygame.Rect(screen_width//2 - 20, screen_height - 100, 40, 40)
+        self.player.health = 100
+        
+        # Створення бази
+        self.base = type('Base', (), {})()
+        self.base.rect = pygame.Rect(screen_width//2 - 30, screen_height - 80, 60, 60)
+        self.base.health = 200
+        
+        # Створення ворогів
+        self.enemies = []
+        for i in range(3):
+            enemy = type('Enemy', (), {})()
+            enemy.rect = pygame.Rect(100 + i * 150, 100, 35, 35)
+            enemy.health = 50
+            self.enemies.append(enemy)
+        
+        self.bullets = []
 
-        self.state = "playing"      # playing / gameover / win
-        self.timer = 0.0            # таймер після перемоги або поразки
+    def handle_event(self, event):
+        """Обробка подій"""
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_ESCAPE:
+                self.scene_manager.change("pause")
+            elif event.key == pygame.K_p:
+                self.toggle_pause()
 
-    def handle_events(self, events):
-        for e in events:
-            if e.type == pygame.KEYDOWN and e.key == pygame.K_ESCAPE:
-                self.app.change_scene(PauseScene, prev_scene=self)
+    def toggle_pause(self):
+        """Перемикач паузи"""
+        if self.state == GameState.RUNNING:
+            self.state = GameState.PAUSED
+        elif self.state == GameState.PAUSED:
+            self.state = GameState.RUNNING
 
-    def update(self):
-        dt = self.app.time.dt
-
-        # якщо перемога або поразка — рахуємо таймер
-        if self.state in ("gameover", "win"):
-            self.timer += dt
-            if self.timer > 2.0:      # через 2 секунди перезапуск
-                self.enter()
+    def update(self, dt):
+        """Оновлення стану гри"""
+        if self.state != GameState.RUNNING:
             return
+            
+        # Тимчасова логіка оновлення для демонстрації
+        keys = pygame.key.get_pressed()
+        speed = 200 * dt
+        
+        if keys[pygame.K_a]:
+            self.player.rect.x -= speed
+        if keys[pygame.K_d]:
+            self.player.rect.x += speed
+        if keys[pygame.K_w]:
+            self.player.rect.y -= speed
+        if keys[pygame.K_s]:
+            self.player.rect.y += speed
+            
+        # Обмеження руху в межах екрану
+        self.player.rect.clamp_ip(self.screen.get_rect())
 
-        # --- рух гравця ---
-        v = self.player.handle_input(self.app.input)
-        dx, dy = int(v.x * self.player.speed * dt), int(v.y * self.player.speed * dt)
-        self.app.physics.move_and_collide(self.player, dx, dy, self.blocks)
-
-        # межі карти
-        if not self.bounds.contains(self.player.rect):
-            if self.player.rect.left < self.bounds.left: self.player.rect.left = self.bounds.left
-            if self.player.rect.right > self.bounds.right: self.player.rect.right = self.bounds.right
-            if self.player.rect.top < self.bounds.top: self.player.rect.top = self.bounds.top
-            if self.player.rect.bottom > self.bounds.bottom: self.player.rect.bottom = self.bounds.bottom
-
-        # стрільба
-        if self.app.input.pressed("fire"):
-            self.shooting.player_try_shoot(self.player, self.bullets)
-
-        # рух і стрільба ворогів
-        self.ai.update(dt, self.enemies, self.blocks, self.bounds)
-        for e in self.enemies:
-            self.shooting.enemy_try_shoot(e, self.bullets)
-
-        # апдейти куль
-        for b in list(self.bullets): b.update(dt)
-
-        # перевірка колізій
-        self.collision.update(self.player, self.enemies, self.bullets, self.blocks, self.eagle, self._on_event)
-
-        # умова перемоги 💪
-        if len(self.enemies) == 0 and self.state == "playing":
-            self.state = "win"
-            self.timer = 0.0
-
-        self.all_sprites.update(dt)
-
-    def _on_event(self, name):
-        if name == "eagle_down":
-            self.state = "gameover"
-            self.timer = 0.0
-        elif name == "player_dead":
-            self.state = "gameover"
-            self.timer = 0.0
-
-    def render(self, screen):
-        self.all_sprites.draw(screen)
-        for b in self.bullets:
-            screen.blit(b.image, b.rect)
-
-        # HP лічильник
-        hp_text = self.font.render(f"HP: {self.player.hp}", True, (255, 255, 255))
-        screen.blit(hp_text, (20, 20))
-
-        # повідомлення про стан
-        if self.state == "gameover":
-            msg = self.font.render("GAME OVER", True, (255, 80, 80))
-            screen.blit(msg, msg.get_rect(center=(C.WIDTH // 2, 50)))
-
-        elif self.state == "win":
-            msg = self.font.render("LEVEL CLEAR!", True, (100, 255, 100))
-            screen.blit(msg, msg.get_rect(center=(C.WIDTH // 2, 50)))
+    def draw(self, screen):
+        """Відображення гри"""
+        # Фон
+        screen.fill((20, 20, 30))
+        
+        # Малювання об'єктів
+        pygame.draw.rect(screen, (0, 100, 200), self.player.rect)  # Гравець
+        pygame.draw.rect(screen, (100, 100, 100), self.base.rect)  # База
+        
+        for enemy in self.enemies:
+            pygame.draw.rect(screen, (200, 50, 50), enemy.rect)  # Вороги
+        
+        # UI
+        health_text = self.font.render(f"HP: {self.player.health}", True, (255, 255, 255))
+        screen.blit(health_text, (10, 10))
+        
+        level_text = self.font.render(f"Рівень: {self.current_level}", True, (255, 255, 255))
+        screen.blit(level_text, (10, 50))
+        
+        # Екран паузи
+        if self.state == GameState.PAUSED:
+            overlay = pygame.Surface(screen.get_size(), pygame.SRCALPHA)
+            overlay.fill((0, 0, 0, 180))
+            screen.blit(overlay, (0, 0))
+            
+            pause_text = self.font.render("ПАУЗА", True, (255, 255, 255))
+            screen.blit(pause_text, (screen.get_width()//2 - pause_text.get_width()//2, 
+                                   screen.get_height()//2))

@@ -5,24 +5,42 @@
 import pygame
 
 class Button:
-    def __init__(self, text, rect, on_click):
-        self.text = text
+    def __init__(self, rect, text, callback, font, color=(255,255,255)):
         self.rect = pygame.Rect(rect)
-        self.on_click = on_click
-        self.font = pygame.font.SysFont("Arial", 24)
+        self.text = text
+        self.callback = callback
+        self.font = font
+        self.color = color
 
-    def draw(self, surf):
-        pygame.draw.rect(surf, (60, 60, 70), self.rect, border_radius=8)
-        pygame.draw.rect(surf, (200, 200, 210), self.rect, 2, border_radius=8)
-        txt = self.font.render(self.text, True, (230, 230, 240))
-        surf.blit(txt, txt.get_rect(center=self.rect.center))
+    def draw(self, surface):
+        pygame.draw.rect(surface, (50,50,50), self.rect)
+        text_surf = self.font.render(self.text, True, self.color)
+        surface.blit(text_surf, text_surf.get_rect(center=self.rect.center))
 
-    def handle(self, events):
-        for e in events:
-            if e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
-                if self.rect.collidepoint(e.pos):
-                    self.on_click()
+    def handle_event(self, event):
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            if self.rect.collidepoint(event.pos):
+                self.callback()
 
-class UI:
-    def __init__(self, assets):
-        self.assets = assets
+class Label:
+    def __init__(self, pos, text, font, color=(255,255,255)):
+        self.pos = pos
+        self.text = text
+        self.font = font
+        self.color = color
+
+    def draw(self, surface):
+        text_surf = self.font.render(self.text, True, self.color)
+        surface.blit(text_surf, self.pos)
+
+class HealthBar:
+    def __init__(self, pos, size, max_hp):
+        self.pos = pos
+        self.size = size
+        self.max_hp = max_hp
+        self.current_hp = max_hp
+
+    def draw(self, surface):
+        pygame.draw.rect(surface, (100,0,0), (*self.pos, self.size[0], self.size[1]))
+        hp_width = int(self.current_hp / self.max_hp * self.size[0])
+        pygame.draw.rect(surface, (0,255,0), (*self.pos, hp_width, self.size[1]))

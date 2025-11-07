@@ -1,24 +1,38 @@
 """
 Низькорівневі операції: AABB-колізії, рух з урахуванням тайлів (брик/стік), проникність об’єктів (куль), ковзання по льоду.
 """
-import pygame
 
 class Physics:
-    @staticmethod
-    def move_and_collide(sprite, dx, dy, blockers):
-        """Просте AABB: рухаємо по осі X, колізія, потім по осі Y."""
-        sprite.rect.x += dx
-        hit_list = [b for b in blockers if sprite.rect.colliderect(b.rect)]
-        for b in hit_list:
-            if dx > 0: sprite.rect.right = b.rect.left
-            elif dx < 0: sprite.rect.left = b.rect.right
+    def __init__(self, tilemap):
+        self.tilemap = tilemap  # 2D массив тайлов
 
-        sprite.rect.y += dy
-        hit_list = [b for b in blockers if sprite.rect.colliderect(b.rect)]
-        for b in hit_list:
-            if dy > 0: sprite.rect.bottom = b.rect.top
-            elif dy < 0: sprite.rect.top = b.rect.bottom
+    def aabb_collision(self, rect1, rect2):
+        """Проверка пересечения двух AABB"""
+        return (rect1.x < rect2.x + rect2.width and
+                rect1.x + rect1.width > rect2.x and
+                rect1.y < rect2.y + rect2.height and
+                rect1.y + rect1.height > rect2.y)
 
-    @staticmethod
-    def rect_collision(a, b) -> bool:
-        return a.rect.colliderect(b.rect)
+    def move(self, entity, dx, dy):
+        """Движение с учетом тайлов"""
+        entity.x += dx
+        entity.y += dy
+
+        # Проверка коллизий с тайлами
+        for tile in self.tilemap.get_collidable_tiles(entity.rect):
+            if self.aabb_collision(entity.rect, tile.rect):
+                # Простая реакция на коллизию
+                if dx > 0:
+                    entity.x = tile.rect.x - entity.rect.width
+                elif dx < 0:
+                    entity.x = tile.rect.x + tile.rect.width
+                if dy > 0:
+                    entity.y = tile.rect.y - entity.rect.height
+                elif dy < 0:
+                    entity.y = tile.rect.y + tile.rect.height
+
+    def apply_sliding(self, entity):
+        """Скольжение по льду"""
+        if self.tilemap.is_ice(entity.x, entity.y):
+            entity.vx *= 0.95  # пример затухания скорости
+            entity.vy *= 0.95

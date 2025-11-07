@@ -1,0 +1,36 @@
+# resources.yaml
+
+sprites:
+  tank_player:
+    file: "images/tank_player.png"
+    size: [40, 40]      # ширина, высота
+  tank_enemy:
+    file: "images/tank_enemy.png"
+    size: [40, 40]
+  bullet:
+    file: "images/bullet.png"
+    size: [8, 8]
+
+atlases:
+  explosions:
+    file: "images/explosions.png"
+    frame_size: [64, 64]  # размер одного кадра
+    frames: 16
+
+sounds:
+  click: "sounds/click.wav"
+  hover: "sounds/hover.wav"
+  fire: "sounds/fire.wav"
+  explosion: "sounds/explosion.wav"
+  menu_music: "sounds/menu_music.ogg"
+
+fonts:
+  ui_font:
+    file: "fonts/verdana.ttf"
+    size: 24
+  small_font:
+    file: "fonts/verdana.ttf"
+    size: 18
+  big_font:
+    file: "fonts/verdana.ttf"
+    size: 64
