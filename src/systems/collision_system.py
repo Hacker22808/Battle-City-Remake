@@ -1,41 +1,74 @@
-"""
-Єдине місце перевірки зіткнень між групами: кулі ↔ блоки, кулі ↔ танки, танки ↔ тайли, танки ↔ бонуси. Видає події «HIT_BRICK», «HIT_STEEL», «TANK_DAMAGED», «POWERUP_PICKED».
-"""
-
-from ..core import constants as C
+import pygame
 
 class CollisionSystem:
-    def __init__(self, physics):
-        self.physics = physics
+    def __init__(self, blocks, enemies, player, base, bullets, audio=None):
+        self.blocks = blocks
+        self.enemies = enemies
+        self.player = player          # GroupSingle
+        self.base = base              # GroupSingle
+        self.bullets = bullets
+        self.audio = audio
 
-    def update(self, player, enemies, bullets, blocks, eagle, on_events):
-        for b in list(bullets):
-            # блоки
-            for bl in list(blocks):
-                if self.physics.rect_collision(b, bl):
-                    bullets.remove(b); b.kill()
-                    if bl.kind == "brick":
-                        bl.hp -= 1
-                        if bl.hp <= 0:
-                            blocks.remove(bl); bl.kill()
-                    return
-            # вороги
-            if b.owner_tag == "player":
-                for e in list(enemies):
-                    if self.physics.rect_collision(b, e):
-                        enemies.remove(e); e.kill()
-                        bullets.remove(b); b.kill()
-                        return
-            else:
-                # ворожа куля потрапила в гравця
-                if self.physics.rect_collision(b, player):
-                    bullets.remove(b); b.kill()
-                    player.take_damage(1)
-                    if not player.alive:
-                        on_events("player_dead")
-                    return
-            # база
-            if eagle and self.physics.rect_collision(b, eagle):
-                bullets.remove(b); b.kill()
-                on_events("eagle_down")
-                return
+    def update(self):
+        p = self.player.sprite
+        b = self.base.sprite
+
+        # --- кулі ---
+        for bullet in list(self.bullets):
+            # по блоках
+            hit_blocks = pygame.sprite.spritecollide(bullet, self.blocks, False)
+            if hit_blocks:
+                for blk in hit_blocks:
+                    if hasattr(blk, "take_damage"):
+                        blk.take_damage(getattr(bullet, "damage", 25))
+                bullet.kill()
+                continue
+
+            # по ворогах (тільки якщо куля гравця)
+            if bullet.team == "player":
+                hit_enemies = pygame.sprite.spritecollide(bullet, self.enemies, False)
+                if hit_enemies:
+                    for e in hit_enemies:
+                        e.hp -= getattr(bullet, "damage", 25)
+                        if e.hp <= 0:
+                            e.kill()
+                    bullet.kill()
+                    continue
+
+            # по гравцю/базі (тільки якщо куля ворога)
+            if bullet.team == "enemy":
+                if p and p.alive() and bullet.rect.colliderect(p.rect):
+                    p.hp -= getattr(bullet, "damage", 25)
+                    bullet.kill()
+                    if p.hp <= 0:
+                        p.kill()
+                    continue
+                if b and bullet.rect.colliderect(b.rect):
+                    b.hp -= getattr(bullet, "damage", 25)
+                    bullet.kill()
+                    if b.hp <= 0:
+                        b.kill()
+                    continue
+
+        # --- контактні колізії без урону ---
+        # гравець ↔ вороги: більше НЕ наносимо урон, максимум — розсунути
+        if p:
+            collide = pygame.sprite.spritecollide(p, self.enemies, False)
+            for e in collide:
+                # простий розштовхувач: відкотити ворога на 1px у протилежний бік
+                if hasattr(e, "direction"):
+                    e.rect.x -= int(e.direction.x or 0)
+                    e.rect.y -= int(e.direction.y or 0)
+
+        # вороги ↔ база: без контактного урону (тільки кулі ворогів мають шкодити)
+        # якщо хочеш повністю блокувати наскрізне проходження — можеш:
+        if b:
+            for e in pygame.sprite.spritecollide(b, self.enemies, False):
+                # відкотити ворога з бази
+                if hasattr(e, "direction"):
+                    e.rect.x -= int(e.direction.x or 0)
+                    e.rect.y -= int(e.direction.y or 0)
+        if p and getattr(p, "hp", 1) <= 0:
+            pygame.event.post(pygame.event.Event(pygame.USEREVENT, {"type": "GAME_OVER"}))
+        if b and getattr(b, "hp", 1) <= 0:
+            pygame.event.post(pygame.event.Event(pygame.USEREVENT, {"type": "GAME_OVER"}))

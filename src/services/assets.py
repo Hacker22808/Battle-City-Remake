@@ -1,96 +1,95 @@
-"""
-Сервіс завантаження/кешування ресурсів: читає resources.yaml, валідуючи наявність файлів; описує нотацію ключів і правила віддачі спрайтів/атласів/звуків/шрифтів.
-"""
-
 import os
-import yaml
 import pygame
+import yaml
 
-ASSETS_DIR = os.path.join(os.path.dirname(__file__), "assets")
+# шлях до папки з ресурсами (звідки запустиш run.py)
+ASSETS_DIR = r"C:\Users\vlad\PycharmProjects\Battle-City-Remake\src\assets"
+
+
 
 class ResourceManager:
-    def __init__(self, yaml_file="resources.yaml"):
-        self.yaml_file = yaml_file
-        self.resources = {}  # raw data from yaml
-        self.cache = {}      # loaded pygame objects
+    """
+    Менеджер ресурсів: зчитує resources.yaml і надає методи для отримання зображень, звуків, шрифтів.
+    Якщо файл відсутній — створює плейсхолдер (Surface із кольором).
+    """
+
+    def __init__(self, yaml_file: str = "resources.yaml"):
+        self.yaml_path = os.path.join(ASSETS_DIR, yaml_file)
+        self._data = {"sprites": {}, "sounds": {}, "fonts": {}}
+        self._cache = {}
         self._load_yaml()
 
+    # ------------------------------------
     def _load_yaml(self):
-        path = os.path.join(ASSETS_DIR, self.yaml_file)
-        if not os.path.exists(path):
-            raise FileNotFoundError(f"{self.yaml_file} not found in assets folder")
-        with open(path, "r", encoding="utf-8") as f:
-            self.resources = yaml.safe_load(f)
-
-    def _validate_file(self, filepath):
-        full_path = os.path.join(ASSETS_DIR, filepath)
-        if not os.path.exists(full_path):
-            raise FileNotFoundError(f"Resource file not found: {full_path}")
-        return full_path
-
-    def get(self, key):
-        """
-        Получение ресурса по ключу.
-        Типы: image, atlas, sound, font
-        """
-        if key in self.cache:
-            return self.cache[key]
-
-        if key not in self.resources:
-            raise KeyError(f"Resource key '{key}' not defined in {self.yaml_file}")
-
-        res_info = self.resources[key]
-        rtype = res_info.get("type")
-        path = res_info.get("path")
-
-        full_path = self._validate_file(path)
-
-        if rtype == "image":
-            obj = pygame.image.load(full_path).convert_alpha()
-        elif rtype == "sound":
-            obj = pygame.mixer.Sound(full_path)
-        elif rtype == "font":
-            size = res_info.get("size", 24)
-            obj = pygame.font.Font(full_path, size)
-        elif rtype == "atlas":
-            # простой спрайтовый атлас: path = image, frames = [x, y, w, h]
-            base_image = pygame.image.load(full_path).convert_alpha()
-            frames = {}
-            for frame_name, rect in res_info.get("frames", {}).items():
-                x, y, w, h = rect
-                frames[frame_name] = base_image.subsurface(pygame.Rect(x, y, w, h))
-            obj = frames
+        if os.path.exists(self.yaml_path):
+            with open(self.yaml_path, "r", encoding="utf-8") as f:
+                self._data = yaml.safe_load(f) or self._data
         else:
-            raise ValueError(f"Unknown resource type: {rtype}")
+            print(f"[assets] Warning: {self.yaml_path} not found. Using placeholders.")
 
-        self.cache[key] = obj
-        return obj
+    # ------------------------------------
+    def _full(self, rel_path: str):
+        """Отримати повний шлях до файлу."""
+        return os.path.join(ASSETS_DIR, rel_path)
 
-# -----------------------------
-# Пример использования
-# -----------------------------
-# resources.yaml
-# player_image:
-#   type: image
-#   path: images/player.png
-# explosion_sound:
-#   type: sound
-#   path: sounds/explosion.wav
-# main_font:
-#   type: font
-#   path: fonts/verdana.ttf
-#   size: 32
-# enemy_atlas:
-#   type: atlas
-#   path: images/enemies.png
-#   frames:
-#       enemy1: [0,0,32,32]
-#       enemy2: [32,0,32,32]
+    # ------------------------------------
+    def image(self, key: str, fallback_size=(32, 32), color=(200, 200, 200)) -> pygame.Surface:
+        """Отримати Surface із resources.yaml або плейсхолдер."""
+        if key in self._cache:
+            return self._cache[key]
 
-# Использование:
-# from assets import ResourceManager
-# res_mgr = ResourceManager()
-# player_img = res_mgr.get("player_image")
-# explosion = res_mgr.get("explosion_sound")
-# font = res_mgr.get("main_font")
-# enemy_frames = res_mgr.get("enemy_atlas")["enemy1"]
+        surf = None
+        info = self._data.get("sprites", {}).get(key)
+        if info:
+            path = self._full(info["file"])
+            if os.path.exists(path):
+                try:
+                    surf = pygame.image.load(path).convert_alpha()
+                except Exception:
+                    surf = None
+
+        if surf is None:
+            surf = pygame.Surface(fallback_size, pygame.SRCALPHA)
+            surf.fill((*color, 255))
+
+        self._cache[key] = surf
+        return surf
+
+    # ------------------------------------
+    def sound(self, key: str):
+        """Отримати звук (pygame.mixer.Sound)."""
+        if key in self._cache:
+            return self._cache[key]
+
+        path_rel = self._data.get("sounds", {}).get(key)
+        snd = None
+        if path_rel:
+            path = self._full(path_rel)
+            if os.path.exists(path):
+                try:
+                    snd = pygame.mixer.Sound(path)
+                except Exception:
+                    snd = None
+
+        self._cache[key] = snd
+        return snd
+
+    # ------------------------------------
+    def font(self, key: str):
+        """Отримати pygame.font.Font."""
+        if key in self._cache:
+            return self._cache[key]
+
+        info = self._data.get("fonts", {}).get(key)
+        if info:
+            path = self._full(info.get("file", "")) if info.get("file") else None
+            size = info.get("size", 24)
+            try:
+                font = pygame.font.Font(path if path and os.path.exists(path) else None, size)
+            except Exception:
+                font = pygame.font.Font(None, size)
+        else:
+            font = pygame.font.Font(None, 24)
+
+        self._cache[key] = font
+        return font

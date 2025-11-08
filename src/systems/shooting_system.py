@@ -1,26 +1,23 @@
-"""
-Правила стрільби: контроль перезарядки, створення кулі, звуки/ефекти при пострілі, обмеження «1 куля на екрані» для базового танка.
-"""
-
 import pygame
 from ..entities.bullet import Bullet
 
+
 class ShootingSystem:
-    def __init__(self, assets):
-        self.assets = assets
+    def __init__(self, bullets_group, audio=None):
+        self.bullets = bullets_group
+        self.audio = audio
 
-    def player_try_shoot(self, player, bullets_group):
-        if player.can_shoot():
-            img = self.assets.image("bullet", size=(8, 8))
-            pos = player.rect.center
-            b = Bullet(img, (pos[0]-4, pos[1]-4), player.direction, owner_tag="player")
-            bullets_group.add(b)
-            player.shot_fired()
-
-    def enemy_try_shoot(self, enemy, bullets_group):
-        if enemy.can_shoot():
-            img = self.assets.image("bullet", size=(8, 8))
-            pos = enemy.rect.center
-            b = Bullet(img, (pos[0]-4, pos[1]-4), enemy.dir, owner_tag="enemy")
-            bullets_group.add(b)
-            enemy.shot_fired()
+    def shoot(self, shooter):
+        # якщо є перезарядка — поважаємо її
+        if hasattr(shooter, "can_shoot") and not shooter.can_shoot():
+            return
+        direction = getattr(shooter, "direction", pygame.Vector2(0, -1))
+        pos = (shooter.rect.centerx + direction.x * 24,
+               shooter.rect.centery + direction.y * 24)
+        team = getattr(shooter, "team", "player")  # ← фракція зі стрільця
+        b = Bullet(pos, direction, team=team)
+        self.bullets.add(b)
+        if hasattr(shooter, "reset_cooldown"):
+            shooter.reset_cooldown()
+        if self.audio:
+            self.audio.play_sfx("fire")

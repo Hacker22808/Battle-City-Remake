@@ -1,51 +1,47 @@
-"""
-Мапінг клавіш → дії (вліво/вправо/вогонь/пауза). Підтримка ремапу та геймпада.
-"""
-
 import pygame
 
+
+_KEY_NAME_TO_K = {
+    "w": pygame.K_w,
+    "a": pygame.K_a,
+    "s": pygame.K_s,
+    "d": pygame.K_d,
+    "space": pygame.K_SPACE,
+    "escape": pygame.K_ESCAPE,
+}
+
+
 class InputManager:
-    def __init__(self):
-        # Стандартные настройки клавиш
-        self.key_map = {
-            "MOVE_LEFT": pygame.K_a,
-            "MOVE_RIGHT": pygame.K_d,
-            "FIRE": pygame.K_SPACE,
-            "PAUSE": pygame.K_ESCAPE
-        }
-        # Для геймпада
-        self.joystick = None
+    def __init__(self, logical_map):
         pygame.joystick.init()
-        if pygame.joystick.get_count() > 0:
-            self.joystick = pygame.joystick.Joystick(0)
-            self.joystick.init()
+        self.joy = pygame.joystick.Joystick(0) if pygame.joystick.get_count() else None
+        if self.joy:
+            self.joy.init()
 
-    def remap_key(self, action, new_key):
-        """Переназначить клавишу для действия"""
-        self.key_map[action] = new_key
+        # логічні дії → pygame key
+        self.key_map = {
+            act: _KEY_NAME_TO_K.get(name, pygame.K_UNKNOWN)
+            for act, name in logical_map.items()
+        }
+        self._keys = None
 
-    def get_actions(self):
-        """Возвращает текущие активные действия"""
-        actions = []
-        keys = pygame.key.get_pressed()
+    def update(self):
+        self._keys = pygame.key.get_pressed()
 
-        if keys[self.key_map["MOVE_LEFT"]]:
-            actions.append("MOVE_LEFT")
-        if keys[self.key_map["MOVE_RIGHT"]]:
-            actions.append("MOVE_RIGHT")
-        if keys[self.key_map["FIRE"]]:
-            actions.append("FIRE")
-        if keys[self.key_map["PAUSE"]]:
-            actions.append("PAUSE")
+    def action(self, name: str) -> bool:
+        k = self.key_map.get(name)
+        return bool(self._keys and k != pygame.K_UNKNOWN and self._keys[k])
 
-        # Проверка геймпада (пример для оси и кнопки A)
-        if self.joystick:
-            axis_x = self.joystick.get_axis(0)
-            if axis_x < -0.5:
-                actions.append("MOVE_LEFT")
-            elif axis_x > 0.5:
-                actions.append("MOVE_RIGHT")
-            if self.joystick.get_button(0):  # кнопка A
-                actions.append("FIRE")
+    def move_axis(self):
+        x = float(self.action("RIGHT")) - float(self.action("LEFT"))
+        y = float(self.action("DOWN")) - float(self.action("UP"))
 
-        return actions
+        if self.joy:
+            ax = self.joy.get_axis(0)
+            ay = self.joy.get_axis(1)
+            if abs(ax) > 0.3:
+                x = ax
+            if abs(ay) > 0.3:
+                y = ay
+
+        return x, y
