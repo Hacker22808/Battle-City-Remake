@@ -12,9 +12,9 @@ class Block(pygame.sprite.Sprite):
         self.hp = hp
 
 
-def take_damage(self, amount):
-    if self.max_hp <= 0:
-        return
-    self.hp -= amount
-    if self.hp <= 0:
-        self.kill()
+    def take_damage(self, amount):
+        if self.max_hp <= 0:
+            return
+        self.hp -= amount
+        if self.hp <= 0:
+            self.kill()

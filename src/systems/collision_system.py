@@ -1,5 +1,8 @@
 import pygame
 
+from src.core.constants import GAME_OVER_EVENT
+
+
 class CollisionSystem:
     def __init__(self, blocks, enemies, player, base, bullets, audio=None):
         self.blocks = blocks
@@ -69,6 +72,6 @@ class CollisionSystem:
                     e.rect.x -= int(e.direction.x or 0)
                     e.rect.y -= int(e.direction.y or 0)
         if p and getattr(p, "hp", 1) <= 0:
-            pygame.event.post(pygame.event.Event(pygame.USEREVENT, {"type": "GAME_OVER"}))
+            pygame.event.post(pygame.event.Event(GAME_OVER_EVENT, {"reason": "player"}))
         if b and getattr(b, "hp", 1) <= 0:
-            pygame.event.post(pygame.event.Event(pygame.USEREVENT, {"type": "GAME_OVER"}))
+            pygame.event.post(pygame.event.Event(GAME_OVER_EVENT, {"reason": "base"}))
